@@ -55,6 +55,46 @@ static double getIntNumber(const char *s)
   return rev; 
 }
 
+/* Convert GPS-type location value into decimal location */
+static double getDecimalPos(const char *str)
+{
+  bool isLongitude;
+  double pos = 0.0;
+  char i;
+
+  if(str[4] == '.') { /* Latitude */
+    char intpart[2];
+    char floatpart[7];
+    strncpy(intpart, str, 2);
+    pos = atof(intpart);
+    strncpy(floatpart, &str[2], 7);
+    pos = pos + atof(floatpart) / 60.0;
+    if (str[10] == 'S') {
+      pos = -1.0 * pos;
+    } else if (str[10] == 'N') {
+      /* pass */
+    } else {  /* unexpected */
+      pos = 0.0;
+    }
+  } else if (str[5] == '.') {  /* Longitude */
+    char intpart[3];
+    char floatpart[7];
+    strncpy(intpart, str, 3);
+    pos = atof(intpart);
+    strncpy(floatpart, &str[3], 7);
+    pos = pos + atof(floatpart) / 60.0;
+    if (str[11] == 'W') {
+      pos = -1.0 * pos;
+    } else if (str[11] == 'E') {
+      /* pass */
+    } else {  /* unexpected */
+      pos = 0.0;
+    }
+  }
+  return pos;
+}
+
+
 void parseGPGGA(const char* GPGGAstr)
 {
   /* Refer to http://www.gpsinformation.org/dale/nmea.htm#GGA
