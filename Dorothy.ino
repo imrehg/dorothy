@@ -125,7 +125,7 @@ static RGB setColorByDistance(const double distance)
  } else if (scale > 6) {
    scale = 6.0;
  }
- colorval = (int)scale * 42;
+ colorval = (int)(scale * 42);
  newcolor.r = 0;
  newcolor.g = 255 - colorval;
  newcolor.b = colorval;
