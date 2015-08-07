@@ -209,9 +209,9 @@ void parseGPGGA(const char* GPGGAstr)
          sprintf(lcdbuff2, "  %3dm from home", (int)distanceFromHome);
        } else if (distanceFromHome < 100000) {
          sprintf(lcdbuff1, "You are about   ");
-         sprintf(lcdbuff2, " %4.1fkm from home", distanceFromHome/1000.0);
+         sprintf(lcdbuff2, "%4.1fkm from home", distanceFromHome/1000.0);
        } else {
-         sprintf(lcdbuff1, "You are %5.0fkm ", distanceFromHome/1000.0);
+         sprintf(lcdbuff1, "You are %.0fkm ", distanceFromHome/1000.0);
          sprintf(lcdbuff2, "  away from home");
        }
        lcd.print(lcdbuff1);
