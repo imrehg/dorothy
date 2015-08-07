@@ -2,8 +2,9 @@
 #include <rgb_lcd.h>
 #include <LGPS.h>
 #include <Math.h>
+#include "Dorothy.h"
 
-#define R 6371000
+#define RADIUS 6371000
 #define TO_RAD (3.1415926536 / 180)
 
 gpsSentenceInfoStruct info;
@@ -13,9 +14,11 @@ char lcdbuff2[256];
 
 rgb_lcd lcd;
 
-int colorR = 0;
-int colorG = 255;
-int colorB = 0;
+/* Set your decimal home latitude and longitude! */
+double homelat = 0.0;
+double homelon = 0.0;
+
+RGB lcdcolor = {255, 0, 0};
 
 static unsigned char getComma(unsigned char num,const char *str)
 {
@@ -99,7 +102,7 @@ static double getDecimalPos(const char *str)
 }
 
 /* From Rosetta Code: http://rosettacode.org/wiki/Haversine_formula#C */
-double getGreatCircleDistance(double th1, double ph1, double th2, double ph2)
+static double getGreatCircleDistance(double th1, double ph1, double th2, double ph2)
 {
 	double dx, dy, dz;
 	ph1 -= ph2;
@@ -108,7 +111,25 @@ double getGreatCircleDistance(double th1, double ph1, double th2, double ph2)
 	dz = sin(th1) - sin(th2);
 	dx = cos(ph1) * cos(th1) - cos(th2);
 	dy = sin(ph1) * cos(th1);
-	return asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * R;
+	return asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * RADIUS;
+}
+
+static RGB setColorByDistance(const double distance)
+{
+ RGB newcolor = { 0 , 255 , 0 };
+ /* scale logarithmically between 10^1 and 10^7 */
+ double scale = log10(distance) - 1;
+ int colorval;
+ if (scale < 0) {
+   scale = 0.0;
+ } else if (scale > 6) {
+   scale = 6.0;
+ }
+ colorval = (int)scale * 42;
+ newcolor.r = 0;
+ newcolor.g = 255 - colorval;
+ newcolor.b = colorval;
+ return newcolor;
 }
 
 void parseGPGGA(const char* GPGGAstr)
@@ -140,6 +161,8 @@ void parseGPGGA(const char* GPGGAstr)
    */
   double latitude;
   double longitude;
+  double decilat, decilon;
+  double distanceFromHome;
   int tmp, hour, minute, second, num ;
   if(GPGGAstr[0] == '$')
   {
@@ -153,10 +176,14 @@ void parseGPGGA(const char* GPGGAstr)
     
     tmp = getComma(2, GPGGAstr);
     latitude = getDoubleNumber(&GPGGAstr[tmp]);
+    decilat = getDecimalPos(&GPGGAstr[tmp]);
     tmp = getComma(4, GPGGAstr);
     longitude = getDoubleNumber(&GPGGAstr[tmp]);
-    sprintf(buff, "latitude = %10.4f, longitude = %10.4f", latitude, longitude);
+    decilon = getDecimalPos(&GPGGAstr[tmp]);
+    sprintf(buff, "GPS    : latitude = %10.4f, longitude = %10.4f", latitude, longitude);
     Serial.println(buff); 
+    sprintf(buff, "Decimal: latitude = %10.6f, longitude = %10.6f", decilat, decilon);
+    Serial.println(buff);
     
     tmp = getComma(7, GPGGAstr);
     num = getIntNumber(&GPGGAstr[tmp]);    
@@ -165,14 +192,33 @@ void parseGPGGA(const char* GPGGAstr)
     lcd.setCursor(0, 0);
     if (num < 1) {
        lcd.print("No satellites...");
+       lcd.setRGB(255, 0, 0);
     } else {
-       sprintf(lcdbuff1, "Lat:%.4f",latitude);
-       sprintf(lcdbuff2, "Lon:%.4f",longitude);
+       sprintf(lcdbuff1, "Lat:%.6f",decilat);
+       sprintf(lcdbuff2, "Lon:%.6f",decilon);
+       distanceFromHome = getGreatCircleDistance(decilat, decilon, homelat, homelon);
+       sprintf(buff, "Distance from home: %.2f meters", distanceFromHome);
+       lcdcolor = setColorByDistance(distanceFromHome);
+       lcd.setRGB(lcdcolor.r, lcdcolor.g, lcdcolor.b);
+
+       if (distanceFromHome < 10) {
+         sprintf(lcdbuff1, "You are very    ");
+         sprintf(lcdbuff2, " nearly at home!");
+       } else if (distanceFromHome < 1000) {
+         sprintf(lcdbuff1, "You are about   ");
+         sprintf(lcdbuff2, "  %3dm from home", (int)distanceFromHome);
+       } else if (distanceFromHome < 100000) {
+         sprintf(lcdbuff1, "You are about   ");
+         sprintf(lcdbuff2, " %4.1fkm from home", distanceFromHome/1000.0);
+       } else {
+         sprintf(lcdbuff1, "You are %5.0fkm ", distanceFromHome/1000.0);
+         sprintf(lcdbuff2, "  away from home");
+       }
        lcd.print(lcdbuff1);
        lcd.setCursor(0,1);
        lcd.print(lcdbuff2);
     };
-    Serial.println(buff); 
+    Serial.println(buff);
   }
   else
   {
@@ -186,7 +232,7 @@ void setup() {
   // set up the LCD's number of columns and rows:
   lcd.begin(16, 2);
     
-  lcd.setRGB(colorR, colorG, colorB);
+  lcd.setRGB(lcdcolor.r, lcdcolor.g, lcdcolor.b);
     
   // Print a message to the LCD.
   lcd.setCursor(0,0);
