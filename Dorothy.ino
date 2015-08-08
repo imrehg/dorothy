@@ -191,7 +191,9 @@ void parseGPGGA(const char* GPGGAstr)
     lcd.clear();
     lcd.setCursor(0, 0);
     if (num < 1) {
-       lcd.print("No satellites...");
+       lcd.print("Hm, where are   ");
+       lcd.setCursor(0, 1);
+       lcd.print("         we now?");
        lcd.setRGB(255, 0, 0);
     } else {
        sprintf(lcdbuff1, "Lat:%.6f",decilat);
