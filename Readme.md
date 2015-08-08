@@ -21,6 +21,13 @@ This is a project using the LinkIt One platform.
 * [Seeed Studio Grove LCD RGB Backlight library](https://github.com/Seeed-Studio/Grove_LCD_RGB_Backlight),
   install it in the Arduino library directory, or add directly to the project
 
+## Features
+
+Software features planned and their completition status
+
+- [x] GPS lock and distance calculation
+- [ ] Save current lock as home location
+
 ## License
 
 All software is released under The MIT License (MIT)
