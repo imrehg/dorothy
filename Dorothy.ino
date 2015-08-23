@@ -1,24 +1,39 @@
 #include <Wire.h>
 #include <rgb_lcd.h>
+#include <LFlash.h>
 #include <LGPS.h>
+#include <LStorage.h>
 #include <Math.h>
 #include "Dorothy.h"
+/* optional hard coded home location */
+#include "Dorothy_home.h" 
 
-#define RADIUS 6371000
-#define TO_RAD (3.1415926536 / 180)
+#ifndef DOROTHYHOME_H
+/* If no hardcoded location, set your decimal home latitude and longitude! */
+double homelat = 0.0;
+double homelon = 0.0;
+#endif /* DOROTHYHOME_H */
+
+double targetlat = homelat;
+double targetlon = homelon;
+boolean storedLocation = false;
+
+char homeFileName[] = "homelocation.log";
 
 gpsSentenceInfoStruct info;
 char buff[256];
 char lcdbuff1[256];
 char lcdbuff2[256];
-
 rgb_lcd lcd;
 
-/* Set your decimal home latitude and longitude! */
-double homelat = 0.0;
-double homelon = 0.0;
+RGB lcdcolor = LCDRED;
 
-RGB lcdcolor = {255, 0, 0};
+const int homeButton = 8;
+boolean useButton;
+
+#define Drive LFlash // use internal Flash
+
+
 
 static unsigned char getComma(unsigned char num,const char *str)
 {
@@ -111,21 +126,21 @@ static double getGreatCircleDistance(double th1, double ph1, double th2, double 
 	dz = sin(th1) - sin(th2);
 	dx = cos(ph1) * cos(th1) - cos(th2);
 	dy = sin(ph1) * cos(th1);
-	return asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * RADIUS;
+	return asin(sqrt(dx * dx + dy * dy + dz * dz) / 2) * 2 * EARTH_RADIUS;
 }
 
 static RGB setColorByDistance(const double distance)
 {
  RGB newcolor = { 0 , 255 , 0 };
  /* scale logarithmically between 10^1 and 10^7 */
- double scale = log10(distance) - 1;
+ double scale = log10(distance) - MINLOGDISTANCE;
  int colorval;
- if (scale < 0) {
+ if (scale < 0.0) {
    scale = 0.0;
- } else if (scale > 6) {
-   scale = 6.0;
+ } else if (scale > (MAXLOGDISTANCE - MINLOGDISTANCE)) {
+   scale = MAXLOGDISTANCE - MINLOGDISTANCE;
  }
- colorval = (int)(scale * 42);
+ colorval = (int)(scale * COLORSCALE);
  newcolor.r = 0;
  newcolor.g = 255 - colorval;
  newcolor.b = colorval;
@@ -188,17 +203,58 @@ void parseGPGGA(const char* GPGGAstr)
     tmp = getComma(7, GPGGAstr);
     num = getIntNumber(&GPGGAstr[tmp]);    
     sprintf(buff, "satellites number = %d", num);
-    lcd.clear();
-    lcd.setCursor(0, 0);
     if (num < 1) {
+       lcd.clear();
+       lcd.setCursor(0, 0);
        lcd.print("Hm, where are   ");
        lcd.setCursor(0, 1);
        lcd.print("         we now?");
        lcd.setRGB(255, 0, 0);
     } else {
+       if (useButton) {
+         if (digitalRead(homeButton) == HIGH) {
+           lcd.clear();
+           lcd.setCursor(0, 0);
+           if (storedLocation) {  // erase records if any
+             targetlat = homelat;
+             targetlon = homelon;
+             boolean removal = Drive.remove(homeFileName);
+             if (removal) {
+               storedLocation = false;
+               lcd.setRGB(255, 255, 0);
+               lcd.print("Home location:  ");
+               lcd.setCursor(0, 1);
+               lcd.print("           reset");
+             } else {
+               Serial.println("File removal failed...");
+             }
+           } else {
+             char locbuff[256];
+             sprintf(locbuff, "%.6f,%.6f,", decilat, decilon);
+             LFile homeFile = Drive.open(homeFileName, FILE_WRITE); 
+             if (homeFile) {
+               homeFile.seek(0);
+               homeFile.println(locbuff);
+               homeFile.close();
+               targetlat = decilat;
+               targetlon = decilon;
+               storedLocation = true;
+               lcd.setRGB(255, 0, 255);
+               lcd.print("Home location:  ");
+               lcd.setCursor(0, 1);
+               lcd.print("           saved");
+               Serial.println("Home location saved:");
+               Serial.println(locbuff);
+             }
+           }
+           delay(2000);
+         }
+       }
+       lcd.clear();
+       lcd.setCursor(0, 0);
        sprintf(lcdbuff1, "Lat:%.6f",decilat);
        sprintf(lcdbuff2, "Lon:%.6f",decilon);
-       distanceFromHome = getGreatCircleDistance(decilat, decilon, homelat, homelon);
+       distanceFromHome = getGreatCircleDistance(decilat, decilon, targetlat, targetlon);
        sprintf(buff, "Distance from home: %.2f meters", distanceFromHome);
        lcdcolor = setColorByDistance(distanceFromHome);
        lcd.setRGB(lcdcolor.r, lcdcolor.g, lcdcolor.b);
@@ -221,6 +277,8 @@ void parseGPGGA(const char* GPGGAstr)
        lcd.print(lcdbuff2);
     };
     Serial.println(buff);
+    Serial.println(targetlat);
+    Serial.println(targetlon);    
   }
   else
   {
@@ -229,8 +287,39 @@ void parseGPGGA(const char* GPGGAstr)
 }
 
 void setup() {
-  // put your setup code here, to run once:
+  Serial.begin(115200);
 
+  // Set up the home button
+  pinMode(homeButton, INPUT);
+  // If button high at start, the pull-up is at work so button's broken,
+  // in which case, do not use!
+  if (digitalRead(homeButton) == HIGH) {
+    useButton = false; 
+  } else {
+    useButton = true; 
+  }
+
+  Drive.begin();
+  /* Try to load saved target location */
+  LFile homeFile = Drive.open(homeFileName, FILE_READ); 
+  if (homeFile) {
+    char location[100];
+    int tmp;
+    int i = 0;
+    
+    while (homeFile.available()) {            
+      location[i++] = (char)homeFile.read();
+    }
+    homeFile.close();
+    for(int i = 0; i < 20; i++) {
+      Serial.println("Location loaded:");
+      targetlat = getDoubleNumber(&location[0]);
+      tmp = getComma(1, location);
+      targetlon = getDoubleNumber(&location[tmp]);
+      storedLocation = true;
+    }
+  }
+ 
   // set up the LCD's number of columns and rows:
   lcd.begin(16, 2);
     
@@ -242,7 +331,6 @@ void setup() {
   lcd.setCursor(0,1);
   lcd.print("  from home...");
 
-  Serial.begin(115200);
   LGPS.powerOn();
   Serial.println("LGPS Power on, and waiting ..."); 
   delay(3000);

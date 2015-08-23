@@ -1,0 +1,9 @@
+#ifndef DOROTHYHOME_H
+#define DOROTHYHOME_H
+
+/* Add your home location and include in sketch */
+/* Example location: Greenwich */
+double homelat = 51.4800;
+double homelon = 0.0;
+
+#endif /* DOROTHYHOME_H */
