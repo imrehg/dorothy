@@ -6,7 +6,7 @@
 #include <Math.h>
 #include "Dorothy.h"
 /* optional hard coded home location */
-#include "Dorothy_home.h" 
+// #include "Dorothy_home.h" 
 
 #ifndef DOROTHYHOME_H
 /* If no hardcoded location, set your decimal home latitude and longitude! */
