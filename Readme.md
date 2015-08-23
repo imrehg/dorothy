@@ -12,8 +12,8 @@ This is a project using the LinkIt One platform.
   * battery
   * GPS antenna
   * Grove RGB LCD
-  * Grove Arduino Shield
-  * Grove Button 
+  * Grove Arduino Shield (optional)
+  * Grove Touch Button (optional) (normal button does not work yet!)
 
 ## Softrware Requirements
 
